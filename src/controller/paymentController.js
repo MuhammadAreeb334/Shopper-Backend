@@ -9,53 +9,59 @@ export const createCheckoutSession = async (req, res) => {
     }
 
     const { cartItems } = req.body;
-    
+
     if (!req.user) {
       return res.status(401).json({
         success: false,
         message: "Unauthorized",
       });
     }
-    
+
     if (!cartItems?.length) {
       return res.status(400).json({
         success: false,
         message: "Cart is Empty",
       });
     }
-    
-    // console.log("Creating session for user:", req.user._id);
-    
+
     const productIds = cartItems.map((i) => i.productId);
     const productsFromDB = await Product.find({
       _id: { $in: productIds },
     });
 
     const lineItems = [];
-    
+
     for (const cartItem of cartItems) {
       const product = productsFromDB.find(
         (p) => p._id.toString() === cartItem.productId,
       );
-      
+
       if (!product) {
         return res.status(400).json({
           success: false,
           message: `Product not found: ${cartItem.productId}`,
         });
       }
-      
+
       const price = product.newPrice || product.price;
-      
+
+      // Create product data without description
+      const productData = {
+        name: product.name,
+        metadata: {
+          productId: product._id.toString(),
+        },
+      };
+
+      // Only add image if available (optional, can be removed if causing issues)
+      if (product.image?.length) {
+        productData.images = [product.image[0]];
+      }
+
       lineItems.push({
         price_data: {
           currency: "usd",
-          product_data: {
-            name: product.name,
-            images: product.image?.length
-              ? [`${process.env.CLIENT_URL}${product.image[0]}`]
-              : [],
-          },
+          product_data: productData,
           unit_amount: Math.round(price * 100),
         },
         quantity: cartItem.quantity,
@@ -67,18 +73,25 @@ export const createCheckoutSession = async (req, res) => {
       line_items: lineItems,
       mode: "payment",
       metadata: {
-        userId: req.user._id.toString(), 
+        userId: req.user._id.toString(),
       },
-      success_url: `${process.env.CLIENT_URL}/success`,
+      success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.CLIENT_URL}/cart`,
     });
 
-    // console.log("Session created with metadata:", session.metadata); 
-    
-    res.status(200).json({ success: true, url: session.url });
+    console.log("Session created successfully:", session.id);
+
+    res.status(200).json({
+      success: true,
+      url: session.url,
+      sessionId: session.id,
+    });
   } catch (error) {
-    console.log("Create session error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Create session error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to create checkout session",
+    });
   }
 };
 
@@ -93,39 +106,37 @@ export const stripeWebhook = async (req, res) => {
       process.env.STRIPE_WEBHOOK_SECRET,
     );
 
-    // console.log("EVENT TYPE:", event.type);
+    console.log("Webhook event type:", event.type);
   } catch (error) {
-    // console.log("SIGNATURE ERROR:", error.message);
+    console.error("Webhook signature error:", error.message);
     return res.status(400).send(`Webhook Error: ${error.message}`);
   }
 
   if (event.type === "checkout.session.completed") {
     try {
       const session = event.data.object;
-      
-      // console.log("Session metadata:", session.metadata);
-      
+
+      console.log("Session metadata:", session.metadata);
+
       const userId = session.metadata?.userId;
-      
-      // console.log("User ID from metadata:", userId);
 
       if (!userId) {
-        // console.log("No userId found - this shouldn't happen in production");
+        console.log("No userId found in metadata");
         return res.status(200).json({ received: true });
       }
 
+      // Clear the user's cart after successful payment
       const result = await Cart.findOneAndUpdate(
         { user: userId },
-        { items: [] },
-        { new: true }
+        { $set: { items: [] } },
+        { new: true },
       );
-      
+
       if (result) {
-        // console.log(`Cart cleared for user: ${userId}`);
+        console.log(`Cart cleared for user: ${userId}`);
       } else {
-        // console.log(`No cart found for user: ${userId}`);
+        console.log(`No cart found for user: ${userId}, creating empty cart`);
         await Cart.create({ user: userId, items: [] });
-        // console.log(`Created empty cart for user: ${userId}`);
       }
     } catch (error) {
       console.error("Error processing webhook:", error);
