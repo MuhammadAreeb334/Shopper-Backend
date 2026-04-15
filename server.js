@@ -83,7 +83,7 @@ const app = express();
 /* -------------------- MIDDLEWARE -------------------- */
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://shopper-bice.vercel.app"],
+    origin: ["https://shopper-clothings.vercel.app"],
     credentials: true,
   }),
 );
