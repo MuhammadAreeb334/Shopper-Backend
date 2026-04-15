@@ -9,38 +9,53 @@ import paymentRouter from "./src/route/paymentRoutes.js";
 import { seedAdmin } from "./src/seedAdmin.js";
 
 dotenv.config();
+
 const app = express();
 
+/* -------------------- MIDDLEWARE -------------------- */
 app.use(
   cors({
-    origin: ["http://localhost:5173",],
+    origin: ["http://localhost:5173", "https://shopper-bice.vercel.app"],
     credentials: true,
   }),
 );
+
+/* Stripe webhook MUST come before express.json */
 app.use("/api/payment/webhook", express.raw({ type: "application/json" }));
+
 app.use(express.json());
+
 app.use("/uploads", express.static("src/uploads"));
+
+/* -------------------- ROUTES -------------------- */
 app.use("/api/products", productRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/cart", cartRoutes);
 app.use("/api/payment", paymentRouter);
 
+/* -------------------- HEALTH CHECK -------------------- */
 app.get("/", (req, res) => {
-  res.status(200).json({ success: true, message: "Shopper is runnung...." });
+  res.status(200).json({
+    success: true,
+    message: "Shopper API is running...",
+  });
 });
 
-const PORT = process.env.PORT || 5000;
-
-const startServer = async () => {
+/* -------------------- DB CONNECTION -------------------- */
+const init = async () => {
   try {
     await connectDB();
-    await seedAdmin();
-    app.listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`);
-    });
+
+    if (process.env.NODE_ENV !== "production") {
+      await seedAdmin();
+    }
+
+    console.log("Database connected");
   } catch (error) {
-    console.error("Failed to connect DB:", error.message);
-    process.exit(1);
+    console.error("DB Connection Error:", error.message);
   }
 };
-startServer();
+
+init();
+
+export default app;
