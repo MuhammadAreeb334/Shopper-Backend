@@ -3,7 +3,6 @@ import Product from "../model/Product.js";
 
 export const createProduct = async (req, res) => {
   try {
-    // Check if files exist
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
@@ -11,7 +10,6 @@ export const createProduct = async (req, res) => {
       });
     }
 
-    // Validate required fields
     const { name, category, newPrice, oldPrice, available } = req.body;
 
     if (!name || !category || !newPrice) {
@@ -21,7 +19,6 @@ export const createProduct = async (req, res) => {
       });
     }
 
-    // Extract Cloudinary URLs from uploaded files
     const imageUrls = req.files.map((file) => file.path);
 
     const product = new Product({
@@ -53,7 +50,6 @@ export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Find existing product
     const existingProduct = await Product.findById(id);
     if (!existingProduct) {
       return res.status(404).json({
@@ -64,7 +60,6 @@ export const updateProduct = async (req, res) => {
 
     let finalImages = [];
 
-    // Handle existing images from frontend
     if (req.body.existingImages) {
       try {
         finalImages = JSON.parse(req.body.existingImages);
@@ -132,7 +127,6 @@ export const deleteProduct = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    // Optional: Delete images from Cloudinary as well
     if (deleteProductById.image && deleteProductById.image.length > 0) {
       for (const imageUrl of deleteProductById.image) {
         try {
